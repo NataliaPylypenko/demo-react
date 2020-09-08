@@ -1,19 +1,51 @@
-const state = {
+
+const api = {
+    get (url) {
+        switch (url) {
+            case '/lots':
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        resolve([
+                            {
+                                id : 1,
+                                name : 'Apple',
+                                description : 'Apple description',
+                                price: 15
+                            },
+                            {
+                                id : 2,
+                                name : 'Orange',
+                                description : 'Orange description',
+                                price: 40
+                            }
+                        ])
+                    }, 1000)
+                })
+            default:
+                throw new Error('Unknown address');
+        }
+    }
+}
+
+const stream = {
+    subscribe (channel, listener) {
+        const match = /price-(\d+)/.exec(channel);
+        if (match) {
+            setInterval(() => {
+                listener({
+                    id : parseInt(match[1]),
+                    price : Math.round((Math.random() * 10 + 30))
+                })
+            }, 500)
+        }
+    }
+}
+// ###################################
+
+let state = {
     time : new Date(),
-    lots : [
-        {
-            id : 1,
-            name : 'Apple',
-            description : 'Apple description',
-            price: 15
-        },
-        {
-            id : 2,
-            name : 'Orange',
-            description : 'Orange description',
-            price: 40
-        },
-    ]
+    lots : null
+
 }
 
 // ###################################
@@ -76,7 +108,18 @@ function Clock({ time }) {
     return node;
 }
 
+function Loading () {
+    const node = document.createElement('div');
+    node.className = 'loading';
+    node.innerText = 'Loading...';
+    return node;
+}
+
 function Lots ({ lots }) {
+    if (lots === null) {
+        return Loading();
+    }
+
     const node = document.createElement('div');
     node.className = 'lots';
 
@@ -111,22 +154,57 @@ function Lot ({ lot }) {
 
 // ###################################
 
-render(
-    App({ state }),
-    document.getElementById('root')
-);
+function renderView (state) {
+    render(
+        App({ state }),
+        document.getElementById('root')
+    );
+}
+
+renderView(state);
 
 // ###################################
 
 setInterval(() => {
-    const time = new Date();
-    const clock = document.getElementById('root').querySelector('.app > .clock');
+    state = {
+        ...state,
+        time: new Date()
+    };
 
-    clock.querySelector('.value').innerText = time.toLocaleTimeString();
+    renderView(state);
 }, 1000);
+
+api.get('/lots').then((lots) => {
+    state = {
+        ...state,
+        lots
+    };
+    renderView(state);
+
+    const onPrice = (data) => {
+        state = {
+            ...state,
+            lots : state.lots.map((lot) => {
+                if (lot.id === data.id) {
+                    return {
+                        ...lot,
+                        price : data.price
+                    }
+                }
+                return lot;
+            })
+        };
+        renderView(state);
+    };
+
+    lots.forEach((lot) => {
+        stream.subscribe(`price-${lot.id}`, onPrice);
+    })
+})
 
 // ###################################
 
 function render (newDom, realDomRoot) {
+    realDomRoot.innerHTML = '';
     realDomRoot.append(newDom);
 }
